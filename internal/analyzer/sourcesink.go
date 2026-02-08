@@ -91,12 +91,23 @@ func (a *Analyzer) CheckSourceSink(page *scanner.Page) []Vulnerability {
 		for _, sink := range htmlSinks {
 			// Check if source and sink are in the same script or related context
 			if isRelated(source, sink, page.HTML) {
+				path := buildSourceSinkPath(page.HTML, source.Pattern, sink.Pattern)
+				poc := generateSourceSinkPOC(source.Pattern, sink.Pattern)
+				
 				vulnerabilities = append(vulnerabilities, Vulnerability{
-					Type:        "Source-Sink Flow",
-					Description: fmt.Sprintf("Potential source-sink vulnerability: %s -> %s", source.Pattern, sink.Pattern),
-					Severity:    "High",
-					Location:    fmt.Sprintf("HTML line %d", findLineNumber(page.HTML, source.Position)),
-					Details:     fmt.Sprintf("Source: %s, Sink: %s", source.Pattern, sink.Pattern),
+					Type:           "Source-Sink Flow",
+					Description:    fmt.Sprintf("Potential source-sink vulnerability: %s -> %s", source.Pattern, sink.Pattern),
+					Severity:       "High",
+					Location:       fmt.Sprintf("HTML line %d", findLineNumber(page.HTML, source.Position)),
+					Details:        fmt.Sprintf("Source: %s, Sink: %s", source.Pattern, sink.Pattern),
+					ProofOfConcept: poc,
+					Confidence:     "High",
+					CVSSScore:      getCVSSScore("Source-Sink", "High"),
+					CWEID:          getCWEID("Source-Sink"),
+					Remediation:    "Validate and sanitize data from sources before passing to sinks. Use proper encoding and escaping.",
+					References:     []string{"https://owasp.org/www-community/attacks/DOM_Based_XSS", "https://cheatsheetseries.owasp.org/cheatsheets/DOM_based_XSS_Prevention_Cheat_Sheet.html"},
+					SourceSinkPath: path,
+					CodeSnippet:    extractContext(page.HTML, source.Position, sink.Position),
 				})
 			}
 		}
@@ -111,12 +122,23 @@ func (a *Analyzer) CheckSourceSink(page *scanner.Page) []Vulnerability {
 			for _, sink := range jsSinks {
 				// Check if source and sink are in the same script or related context
 				if isRelated(source, sink, js) {
+					path := buildSourceSinkPath(js, source.Pattern, sink.Pattern)
+					poc := generateSourceSinkPOC(source.Pattern, sink.Pattern)
+					
 					vulnerabilities = append(vulnerabilities, Vulnerability{
-						Type:        "Source-Sink Flow",
-						Description: fmt.Sprintf("Potential source-sink vulnerability: %s -> %s", source.Pattern, sink.Pattern),
-						Severity:    "High",
-						Location:    "JavaScript",
-						Details:     fmt.Sprintf("Source: %s, Sink: %s, Code: %s", source.Pattern, sink.Pattern, truncateString(sink.CodeSnippet, 100)),
+						Type:           "Source-Sink Flow",
+						Description:    fmt.Sprintf("Potential source-sink vulnerability: %s -> %s", source.Pattern, sink.Pattern),
+						Severity:       "High",
+						Location:       "JavaScript",
+						Details:        fmt.Sprintf("Source: %s, Sink: %s, Code: %s", source.Pattern, sink.Pattern, truncateString(sink.CodeSnippet, 100)),
+						ProofOfConcept: poc,
+						Confidence:     "High",
+						CVSSScore:      getCVSSScore("Source-Sink", "High"),
+						CWEID:          getCWEID("Source-Sink"),
+						Remediation:    "Validate and sanitize data from sources before passing to sinks. Use proper encoding and escaping.",
+						References:     []string{"https://owasp.org/www-community/attacks/DOM_Based_XSS", "https://cheatsheetseries.owasp.org/cheatsheets/DOM_based_XSS_Prevention_Cheat_Sheet.html"},
+						SourceSinkPath: path,
+						CodeSnippet:    extractContext(js, source.Position, sink.Position),
 					})
 				}
 			}
@@ -222,6 +244,111 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// Enhanced helper functions for detailed analysis
+
+func buildSourceSinkPath(content, source, sink string) string {
+	// Find positions of source and sink in content
+	sourcePos := strings.Index(content, source)
+	sinkPos := strings.Index(content, sink)
+	
+	if sourcePos == -1 || sinkPos == -1 {
+		return "Could not determine path"
+	}
+	
+	// Extract the code between source and sink
+	start := sourcePos
+	end := sinkPos + len(sink)
+	
+	if start > end {
+		// Swap if source comes after sink
+		start, end = end, start
+	}
+	
+	// Limit the path length to prevent huge outputs
+	if end-start > 500 {
+		end = start + 500
+	}
+	
+	path := content[start:end]
+	
+	// Clean up the path to make it readable
+	path = strings.ReplaceAll(path, "\n", "\\n")
+	path = strings.ReplaceAll(path, "\t", "\\t")
+	
+	return path
+}
+
+func generateSourceSinkPOC(source, sink string) string {
+	// Generate a POC based on the source and sink types
+	pocTemplate := ""
+	
+	switch {
+	case (source == "location.hash" || source == "location.search") && 
+	     (strings.Contains(sink, "innerHTML") || strings.Contains(sink, "outerHTML")):
+		pocTemplate = fmt.Sprintf(
+			`PoC: %s -> %s
+Example: <script>%s = %s;</script>
+Test URL: ?#<img src=x onerror=alert('XSS')>`,
+			source, sink, sink, source)
+	case strings.Contains(sink, "eval") && 
+	     (strings.Contains(source, "location") || strings.Contains(source, "document")):
+		pocTemplate = fmt.Sprintf(
+			`PoC: %s -> %s
+Example: <script>eval(%s);</script>
+Test URL: ?eval=alert('XSS')`,
+			source, sink, source)
+	default:
+		pocTemplate = fmt.Sprintf("Potential source-sink flow: %s -> %s", source, sink)
+	}
+	
+	return pocTemplate
+}
+
+func getCVSSScore(vulnType, severity string) string {
+	switch severity {
+	case "Critical":
+		return "9.0-10.0"
+	case "High":
+		return "7.0-8.9"
+	case "Medium":
+		return "4.0-6.9"
+	case "Low":
+		return "0.1-3.9"
+	default:
+		return "N/A"
+	}
+}
+
+func getCWEID(vulnType string) string {
+	switch vulnType {
+	case "XSS":
+		return "CWE-79"
+	case "CSP":
+		return "CWE-693" // Protection Mechanism Failure
+	case "DOM":
+		return "CWE-116" // Improper Encoding or Escaping of Output
+	case "Source-Sink":
+		return "CWE-80" // Improper Neutralization of Script-Related HTML Tags in a Web Page
+	default:
+		return "N/A"
+	}
+}
+
+func extractContext(content string, start, end int) string {
+	contextSize := 100
+	startPos := start - contextSize
+	endPos := end + contextSize
+	
+	if startPos < 0 {
+		startPos = 0
+	}
+	if endPos > len(content) {
+		endPos = len(content)
+	}
+	
+	return content[startPos:endPos]
 }
 
 func truncateString(str string, maxLen int) string {

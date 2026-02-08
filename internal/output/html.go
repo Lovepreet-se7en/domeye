@@ -17,7 +17,7 @@ func (f *HTMLFormatter) Format(results chan analyzer.Result) {
 	tmpl := `<!DOCTYPE html>
 <html>
 <head>
-	<title>DOM-Recon Scan Report</title>
+	<title>DOMEye Scan Report</title>
 	<style>
 		body { font-family: Arial, sans-serif; line-height: 1.6; margin: 20px; }
 		h1 { color: #333; }
@@ -28,10 +28,13 @@ func (f *HTMLFormatter) Format(results chan analyzer.Result) {
 		.severity-low { background-color: #e3f2fd; border-left: 5px solid #2196f3; }
 		.url { font-weight: bold; margin-bottom: 10px; }
 		.details { margin-top: 10px; padding: 10px; background-color: #f5f5f5; border-radius: 3px; }
+		.poc { background-color: #fff3cd; border: 1px solid #ffeaa7; padding: 10px; margin: 10px 0; }
+		.remediation { background-color: #d1ecf1; border: 1px solid #bee5eb; padding: 10px; margin: 10px 0; }
+		.references { background-color: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; margin: 10px 0; }
 	</style>
 </head>
 <body>
-	<h1>DOM-Recon Scan Report</h1>
+	<h1>DOMEye Scan Report</h1>
 	{{range .}}
 		<h2 class="url">{{.URL}}</h2>
 		{{if .Vulnerabilities}}
@@ -42,6 +45,41 @@ func (f *HTMLFormatter) Format(results chan analyzer.Result) {
 					<p><strong>Location:</strong> {{.Location}}</p>
 					{{if .Details}}
 						<div class="details"><strong>Details:</strong> {{.Details}}</div>
+					{{end}}
+					{{if .ProofOfConcept}}
+						<div class="poc">
+							<strong>Proof of Concept:</strong><br>
+							<pre>{{.ProofOfConcept}}</pre>
+						</div>
+					{{end}}
+					{{if .Confidence}}
+						<p><strong>Confidence:</strong> {{.Confidence}}</p>
+					{{end}}
+					{{if .CVSSScore}}
+						<p><strong>CVSS Score:</strong> {{.CVSSScore}}</p>
+					{{end}}
+					{{if .CWEID}}
+						<p><strong>CWE ID:</strong> {{.CWEID}}</p>
+					{{end}}
+					{{if .Remediation}}
+						<div class="remediation">
+							<strong>Remediation:</strong><br>
+							{{.Remediation}}
+						</div>
+					{{end}}
+					{{if .SourceSinkPath}}
+						<div class="details"><strong>Source-Sink Path:</strong><br><pre>{{.SourceSinkPath}}</pre></div>
+					{{end}}
+					{{if .CodeSnippet}}
+						<div class="details"><strong>Code Snippet:</strong><br><pre>{{.CodeSnippet}}</pre></div>
+					{{end}}
+					{{if .References}}
+						<div class="references">
+							<strong>References:</strong>
+							<ul>
+								{{range .References}}<li><a href="{{.}}" target="_blank">{{.}}</a></li>{{end}}
+							</ul>
+						</div>
 					{{end}}
 				</div>
 			{{end}}

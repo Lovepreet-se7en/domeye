@@ -10,6 +10,14 @@ type Vulnerability struct {
     Severity    string
     Location    string
     Details     string
+    ProofOfConcept string  // Detailed POC for exploitation
+    Confidence  string    // Confidence level (High, Medium, Low)
+    CVSSScore   string    // CVSS score if available
+    CWEID       string    // CWE identifier
+    Remediation string    // Suggested remediation
+    References  []string  // Related references and resources
+    SourceSinkPath string // Path from source to sink for data flow analysis
+    CodeSnippet string   // Relevant code snippet showing the vulnerability
 }
 
 type Result struct {

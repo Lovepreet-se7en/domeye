@@ -60,13 +60,33 @@ func (a *Analyzer) CheckXSS(page *scanner.Page) []Vulnerability {
 	for _, pattern := range xssPatterns {
 		matches := pattern.pattern.FindAllStringIndex(page.HTML, -1)
 		for _, match := range matches {
+			snippet := page.HTML[match[0]:match[1]]
 			location := fmt.Sprintf("HTML line %d", findLineNumber(page.HTML, match[0]))
+			
+			// Determine confidence level based on pattern
+			confidence := "High"
+			if strings.Contains(snippet, "innerHTML") || strings.Contains(snippet, "eval") {
+				confidence = "High"
+			} else {
+				confidence = "Medium"
+			}
+			
+			// Generate POC based on the vulnerability type
+			poc := generateXSSEXPoc(snippet, sourceSinkAnalysis(page, snippet))
+			
 			vulnerabilities = append(vulnerabilities, Vulnerability{
-				Type:        "XSS",
-				Description: pattern.description,
-				Severity:    pattern.severity,
-				Location:    location,
-				Details:     fmt.Sprintf("Pattern: %s", page.HTML[match[0]:match[1]]),
+				Type:           "XSS",
+				Description:    pattern.description,
+				Severity:       pattern.severity,
+				Location:       location,
+				Details:        fmt.Sprintf("Pattern: %s", snippet),
+				ProofOfConcept: poc,
+				Confidence:     confidence,
+				CVSSScore:      getCVSSScore("XSS", pattern.severity),
+				CWEID:          getCWEID("XSS"),
+				Remediation:    getXSSRemediation(pattern.description),
+				References:     []string{"https://owasp.org/www-community/attacks/DOM_Based_XSS"},
+				CodeSnippet:    extractContext(page.HTML, match[0], match[1]),
 			})
 		}
 	}
@@ -76,18 +96,138 @@ func (a *Analyzer) CheckXSS(page *scanner.Page) []Vulnerability {
 		for _, source := range dangerousSources {
 			if strings.Contains(js, source) {
 				location := fmt.Sprintf("JavaScript (source: %s)", source)
+				
 				vulnerabilities = append(vulnerabilities, Vulnerability{
-					Type:        "XSS",
-					Description: fmt.Sprintf("Potential XSS via dangerous source: %s", source),
-					Severity:    "High",
-					Location:    location,
-					Details:     "Dangerous data source detected in JavaScript",
+					Type:           "XSS",
+					Description:    fmt.Sprintf("Potential XSS via dangerous source: %s", source),
+					Severity:       "High",
+					Location:       location,
+					Details:        "Dangerous data source detected in JavaScript",
+					ProofOfConcept: generateSourceBasedPOC(source),
+					Confidence:     "Medium",
+					CVSSScore:      getCVSSScore("XSS", "High"),
+					CWEID:          getCWEID("XSS"),
+					Remediation:    getXSSRemediation(fmt.Sprintf("XSS via %s", source)),
+					References:     []string{"https://owasp.org/www-community/attacks/DOM_Based_XSS"},
+					CodeSnippet:    extractContext(js, strings.Index(js, source), strings.Index(js, source)+len(source)),
 				})
 			}
 		}
 	}
 
 	return vulnerabilities
+}
+
+// Helper functions for enhanced analysis
+
+func generateXSSEXPoc(pattern string, hasSourceSink bool) string {
+	switch {
+	case strings.Contains(strings.ToLower(pattern), "innerhtml"):
+		if hasSourceSink {
+			return fmt.Sprintf(`<script>document.body.innerHTML = location.hash.substring(1);</script> <!-- PoC: ?#<img src=x onerror=alert('XSS')> -->`)
+		}
+		return fmt.Sprintf(`PoC: document.body.innerHTML = "%s";`, pattern)
+	case strings.Contains(strings.ToLower(pattern), "eval"):
+		if hasSourceSink {
+			return `<script>eval(location.hash.substring(1));</script> <!-- PoC: ?#alert('XSS') -->`
+		}
+		return fmt.Sprintf(`PoC: eval("%s");`, pattern)
+	case strings.Contains(strings.ToLower(pattern), "document.write"):
+		if hasSourceSink {
+			return `<script>document.write(location.hash.substring(1));</script> <!-- PoC: ?#<img src=x onerror=alert('XSS')> -->`
+		}
+		return fmt.Sprintf(`PoC: document.write("%s");`, pattern)
+	default:
+		return fmt.Sprintf("Potential XSS with pattern: %s", pattern)
+	}
+}
+
+func generateSourceBasedPOC(source string) string {
+	switch source {
+	case "location.hash":
+		return `PoC: <script>alert(document.location.hash.substring(1));</script> <!-- Append #test to URL -->`
+	case "location.search":
+		return `PoC: <script>alert(document.location.search);</script> <!-- Append ?param=test to URL -->`
+	case "document.URL":
+		return `PoC: <script>alert(document.URL);</script>`
+	case "document.referrer":
+		return `PoC: <script>alert(document.referrer);</script>`
+	case "window.name":
+		return `PoC: <script>alert(window.name);</script> <!-- Set window.name in opener -->`
+	default:
+		return fmt.Sprintf("Potential XSS via source: %s", source)
+	}
+}
+
+func getCVSSScore(vulnType, severity string) string {
+	switch severity {
+	case "Critical":
+		return "9.0-10.0"
+	case "High":
+		return "7.0-8.9"
+	case "Medium":
+		return "4.0-6.9"
+	case "Low":
+		return "0.1-3.9"
+	default:
+		return "N/A"
+	}
+}
+
+func getCWEID(vulnType string) string {
+	switch vulnType {
+	case "XSS":
+		return "CWE-79"
+	case "CSP":
+		return "CWE-693" // Protection Mechanism Failure
+	case "DOM":
+		return "CWE-116" // Improper Encoding or Escaping of Output
+	default:
+		return "N/A"
+	}
+}
+
+func getXSSRemediation(description string) string {
+	return "Sanitize user inputs before using them in DOM operations. Use safe methods like textContent instead of innerHTML. Implement proper Content Security Policy (CSP)."
+}
+
+func extractContext(content string, start, end int) string {
+	contextSize := 100
+	startPos := start - contextSize
+	endPos := end + contextSize
+	
+	if startPos < 0 {
+		startPos = 0
+	}
+	if endPos > len(content) {
+		endPos = len(content)
+	}
+	
+	return content[startPos:endPos]
+}
+
+func sourceSinkAnalysis(page *scanner.Page, pattern string) bool {
+	// Simple check to see if both sources and sinks exist in the page
+	hasSource := false
+	for _, source := range dangerousSources {
+		if strings.Contains(page.HTML, source) || containsAnyJS(page.JavaScript, source) {
+			hasSource = true
+			break
+		}
+	}
+	
+	hasSink := strings.Contains(page.HTML, pattern)
+	
+	return hasSource && hasSink
+}
+
+func containsAnyJS(jsList []string, substr string) bool {
+	for _, js := range jsList {
+		if strings.Contains(js, substr) {
+			return true
+		}
+	}
+	return false
 }
 
 func findLineNumber(content string, pos int) int {
