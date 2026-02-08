@@ -17,7 +17,7 @@ DOMEye is a powerful CLI tool for analyzing web pages for DOM-based vulnerabilit
 
 ```bash
 git clone https://github.com/Lovepreet-se7en/domeye.git
-cd DOMEye
+cd domeye
 go build -o domeye
 ```
 
