@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Page for DOM Vulnerabilities</title>
+</head>
+<body>
+    <h1>Test Page for DOM Vulnerability Detection</h1>
+    
+    <!-- DOM Clobbering potential -->
+    <form id="form">
+    <input id="submit">
+    <input id="action">
+
+    <!-- Sample vulnerable code snippets -->
+    <script>
+        // XSS via innerHTML
+        document.getElementById('content').innerHTML = location.hash;
+
+        // Source-sink flow: location -> eval
+        var userInput = location.search.substring(1);
+        eval(userInput);
+
+        // Prototype pollution
+        var obj = {};
+        obj[location.hash.slice(1)] = "value";
+
+        // Open redirect
+        if(location.hash) {
+            window.location.href = location.hash.substr(1);
+        }
+
+        // Dangerous attribute assignment
+        var link = document.createElement('a');
+        link.href = location.pathname;
+        document.body.appendChild(link);
+
+        // setTimeout with user input
+        setTimeout("alert(" + location.search + ")", 1000);
+
+        // Storage injection
+        document.cookie = "test=" + location.hash;
+    </script>
+
+    <div id="content">Default content</div>
+</body>
+</html>

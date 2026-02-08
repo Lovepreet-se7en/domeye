@@ -1,0 +1,6 @@
+# Example URLs for DOM-Recon testing
+# Add one URL per line
+
+https://example.com
+https://test.com
+https://demo.com
