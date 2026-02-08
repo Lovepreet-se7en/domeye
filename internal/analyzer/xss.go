@@ -82,8 +82,8 @@ func (a *Analyzer) CheckXSS(page *scanner.Page) []Vulnerability {
 				Details:        fmt.Sprintf("Pattern: %s", snippet),
 				ProofOfConcept: poc,
 				Confidence:     confidence,
-				CVSSScore:      getCVSSScore("XSS", pattern.severity),
-				CWEID:          getCWEID("XSS"),
+				CVSSScore:      getXSSCVSSScore("XSS", pattern.severity),
+				CWEID:          getXSSCWEID("XSS"),
 				Remediation:    getXSSRemediation(pattern.description),
 				References:     []string{"https://owasp.org/www-community/attacks/DOM_Based_XSS"},
 				CodeSnippet:    extractContext(page.HTML, match[0], match[1]),
@@ -105,8 +105,8 @@ func (a *Analyzer) CheckXSS(page *scanner.Page) []Vulnerability {
 					Details:        "Dangerous data source detected in JavaScript",
 					ProofOfConcept: generateSourceBasedPOC(source),
 					Confidence:     "Medium",
-					CVSSScore:      getCVSSScore("XSS", "High"),
-					CWEID:          getCWEID("XSS"),
+					CVSSScore:      getXSSCVSSScore("XSS", "High"),
+					CWEID:          getXSSCWEID("XSS"),
 					Remediation:    getXSSRemediation(fmt.Sprintf("XSS via %s", source)),
 					References:     []string{"https://owasp.org/www-community/attacks/DOM_Based_XSS"},
 					CodeSnippet:    extractContext(js, strings.Index(js, source), strings.Index(js, source)+len(source)),
@@ -159,52 +159,18 @@ func generateSourceBasedPOC(source string) string {
 	}
 }
 
-func getCVSSScore(vulnType, severity string) string {
-	switch severity {
-	case "Critical":
-		return "9.0-10.0"
-	case "High":
-		return "7.0-8.9"
-	case "Medium":
-		return "4.0-6.9"
-	case "Low":
-		return "0.1-3.9"
-	default:
-		return "N/A"
-	}
+func getXSSCVSSScore(vulnType, severity string) string {
+	return getCVSSScore(severity)
 }
 
-func getCWEID(vulnType string) string {
-	switch vulnType {
-	case "XSS":
-		return "CWE-79"
-	case "CSP":
-		return "CWE-693" // Protection Mechanism Failure
-	case "DOM":
-		return "CWE-116" // Improper Encoding or Escaping of Output
-	default:
-		return "N/A"
-	}
+func getXSSCWEID(vulnType string) string {
+	return getCWEID(vulnType)
 }
 
 func getXSSRemediation(description string) string {
 	return "Sanitize user inputs before using them in DOM operations. Use safe methods like textContent instead of innerHTML. Implement proper Content Security Policy (CSP)."
 }
 
-func extractContext(content string, start, end int) string {
-	contextSize := 100
-	startPos := start - contextSize
-	endPos := end + contextSize
-	
-	if startPos < 0 {
-		startPos = 0
-	}
-	if endPos > len(content) {
-		endPos = len(content)
-	}
-	
-	return content[startPos:endPos]
-}
 
 func sourceSinkAnalysis(page *scanner.Page, pattern string) bool {
 	// Simple check to see if both sources and sinks exist in the page

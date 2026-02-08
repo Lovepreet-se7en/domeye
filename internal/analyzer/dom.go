@@ -3,6 +3,7 @@ package analyzer
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/Lovepreet-se7en/domeye/internal/scanner"
 )
@@ -82,8 +83,8 @@ func (a *Analyzer) CheckDOM(page *scanner.Page) []Vulnerability {
 				Details:        fmt.Sprintf("Pattern: %s", snippet),
 				ProofOfConcept: generateDOMPOC(pattern.description, snippet),
 				Confidence:     "High",
-				CVSSScore:      getCVSSScore("DOM", pattern.severity),
-				CWEID:          getCWEID("DOM"),
+				CVSSScore:      getDOMCVSSScore("DOM", pattern.severity),
+				CWEID:          getDOMCWEID("DOM"),
 				Remediation:    getDOMRemediation(pattern.description),
 				References:     []string{"https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/01-Testing_for_DOM-based_Cross_Site_Scripting"},
 				CodeSnippet:    extractContext(page.HTML, match[0], match[1]),
@@ -105,11 +106,11 @@ func (a *Analyzer) CheckDOM(page *scanner.Page) []Vulnerability {
 						Description:    fmt.Sprintf("Inline event handler: %s", handler),
 						Severity:       "Medium",
 						Location:       "JavaScript",
-						Details:        "Inline event handlers can lead to security issues",
+						Details:        fmt.Sprintf("Pattern: %s", snippet),
 						ProofOfConcept: generateInlineEventHandlerPOC(handler),
 						Confidence:     "Medium",
-						CVSSScore:      getCVSSScore("DOM", "Medium"),
-						CWEID:          getCWEID("DOM"),
+						CVSSScore:      getDOMCVSSScore("DOM", "Medium"),
+						CWEID:          getDOMCWEID("DOM"),
 						Remediation:    getDOMRemediation(fmt.Sprintf("Inline event handler: %s", handler)),
 						References:     []string{"https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/01-Testing_for_DOM-based_Cross_Site_Scripting"},
 						CodeSnippet:    extractContext(js, match[0], match[1]),
@@ -158,51 +159,14 @@ func generateInlineEventHandlerPOC(handler string) string {
 	}
 }
 
-func getCVSSScore(vulnType, severity string) string {
-	switch severity {
-	case "Critical":
-		return "9.0-10.0"
-	case "High":
-		return "7.0-8.9"
-	case "Medium":
-		return "4.0-6.9"
-	case "Low":
-		return "0.1-3.9"
-	default:
-		return "N/A"
-	}
+func getDOMCVSSScore(vulnType, severity string) string {
+	return getCVSSScore(severity)
 }
 
-func getCWEID(vulnType string) string {
-	switch vulnType {
-	case "XSS":
-		return "CWE-79"
-	case "CSP":
-		return "CWE-693" // Protection Mechanism Failure
-	case "DOM":
-		return "CWE-116" // Improper Encoding or Escaping of Output
-	case "Source-Sink":
-		return "CWE-80" // Improper Neutralization of Script-Related HTML Tags in a Web Page
-	default:
-		return "N/A"
-	}
+func getDOMCWEID(vulnType string) string {
+	return getCWEID(vulnType)
 }
 
 func getDOMRemediation(description string) string {
 	return "Avoid using dangerous DOM manipulation methods. Sanitize inputs, use safe alternatives like textContent, and implement proper CSP policies."
-}
-
-func extractContext(content string, start, end int) string {
-	contextSize := 100
-	startPos := start - contextSize
-	endPos := end + contextSize
-	
-	if startPos < 0 {
-		startPos = 0
-	}
-	if endPos > len(content) {
-		endPos = len(content)
-	}
-	
-	return content[startPos:endPos]
 }

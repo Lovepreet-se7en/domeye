@@ -33,8 +33,8 @@ func (a *Analyzer) CheckCSP(page *scanner.Page) []Vulnerability {
 			Details:        "CSP header is missing, increasing risk of XSS attacks",
 			ProofOfConcept: generateCSPBypassPOC("missing"),
 			Confidence:     "High",
-			CVSSScore:      getCVSSScore("CSP", "High"),
-			CWEID:          getCWEID("CSP"),
+			CVSSScore:      getCSPCVSSScore("CSP", "High"),
+			CWEID:          getCSPCWEID("CSP"),
 			Remediation:    "Implement a strong Content Security Policy header to restrict the execution of scripts and other resources.",
 			References:     []string{"https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP", "https://content-security-policy.com/"},
 			CodeSnippet:    "Content-Security-Policy: default-src 'self'; script-src 'self'; object-src 'none';",
@@ -54,8 +54,8 @@ func (a *Analyzer) CheckCSP(page *scanner.Page) []Vulnerability {
 				Details:        fmt.Sprintf("The directive '%s' weakens CSP protection", directive),
 				ProofOfConcept: generateCSPBypassPOC(directive),
 				Confidence:     "High",
-				CVSSScore:      getCVSSScore("CSP", "High"),
-				CWEID:          getCWEID("CSP"),
+				CVSSScore:      getCSPCVSSScore("CSP", "High"),
+				CWEID:          getCSPCWEID("CSP"),
 				Remediation:    fmt.Sprintf("Remove the '%s' directive from your CSP header to strengthen security.", directive),
 				References:     []string{"https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP", "https://content-security-policy.com/"},
 				CodeSnippet:    fmt.Sprintf("Current: %s", page.CSP),
@@ -74,8 +74,8 @@ func (a *Analyzer) CheckCSP(page *scanner.Page) []Vulnerability {
 				Details:        fmt.Sprintf("The '%s' directive should be explicitly defined", directive),
 				ProofOfConcept: generateCSPBypassPOC(fmt.Sprintf("missing-%s", directive)),
 				Confidence:     "Medium",
-				CVSSScore:      getCVSSScore("CSP", "Medium"),
-				CWEID:          getCWEID("CSP"),
+				CVSSScore:      getCSPCVSSScore("CSP", "Medium"),
+				CWEID:          getCSPCWEID("CSP"),
 				Remediation:    fmt.Sprintf("Add the '%s' directive to your CSP header to improve security.", directive),
 				References:     []string{"https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP", "https://content-security-policy.com/"},
 				CodeSnippet:    fmt.Sprintf("Consider adding: %s 'self';", directive),
@@ -93,8 +93,8 @@ func (a *Analyzer) CheckCSP(page *scanner.Page) []Vulnerability {
 			Details:        "Add report-uri or report-to directive to monitor CSP violations",
 			ProofOfConcept: generateCSPBypassPOC("no-reporting"),
 			Confidence:     "Low",
-			CVSSScore:      getCVSSScore("CSP", "Low"),
-			CWEID:          getCWEID("CSP"),
+			CVSSScore:      getCSPCVSSScore("CSP", "Low"),
+			CWEID:          getCSPCWEID("CSP"),
 			Remediation:    "Add report-uri or report-to directive to your CSP header to monitor violations.",
 			References:     []string{"https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP", "https://content-security-policy.com/"},
 			CodeSnippet:    "Add: report-uri /csp-report-endpoint/; or report-to csp-report;",
@@ -125,47 +125,11 @@ func generateCSPBypassPOC(issueType string) string {
 	}
 }
 
-func getCVSSScore(vulnType, severity string) string {
-	switch severity {
-	case "Critical":
-		return "9.0-10.0"
-	case "High":
-		return "7.0-8.9"
-	case "Medium":
-		return "4.0-6.9"
-	case "Low":
-		return "0.1-3.9"
-	default:
-		return "N/A"
-	}
+func getCSPCVSSScore(vulnType, severity string) string {
+	return getCVSSScore(severity)
 }
 
-func getCWEID(vulnType string) string {
-	switch vulnType {
-	case "XSS":
-		return "CWE-79"
-	case "CSP":
-		return "CWE-693" // Protection Mechanism Failure
-	case "DOM":
-		return "CWE-116" // Improper Encoding or Escaping of Output
-	case "Source-Sink":
-		return "CWE-80" // Improper Neutralization of Script-Related HTML Tags in a Web Page
-	default:
-		return "N/A"
-	}
+func getCSPCWEID(vulnType string) string {
+	return getCWEID(vulnType)
 }
 
-func extractContext(content string, start, end int) string {
-	contextSize := 100
-	startPos := start - contextSize
-	endPos := end + contextSize
-	
-	if startPos < 0 {
-		startPos = 0
-	}
-	if endPos > len(content) {
-		endPos = len(content)
-	}
-	
-	return content[startPos:endPos]
-}
