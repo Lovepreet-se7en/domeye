@@ -6,7 +6,7 @@ import (
 	"strings"
 	"text/template"
 
-	"domeye/internal/analyzer"
+	"github.com/Lovepreet-se7en/domeye/internal/analyzer"
 )
 
 type HTMLFormatter struct {

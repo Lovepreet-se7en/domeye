@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"domeye/internal/scanner"
+	"github.com/Lovepreet-se7en/domeye/internal/scanner"
 )
 
 var domPatterns = []struct {

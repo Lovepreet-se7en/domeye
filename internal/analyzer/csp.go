@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"domeye/internal/scanner"
+	"github.com/Lovepreet-se7en/domeye/internal/scanner"
 )
 
 var unsafeDirectives = []string{

@@ -1,7 +1,7 @@
 package output
 
 import (
-	"domeye/internal/analyzer"
+	"github.com/Lovepreet-se7en/domeye/internal/analyzer"
 )
 
 // Formatter defines the interface for output formatters

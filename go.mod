@@ -1,4 +1,4 @@
-module domeye
+module github.com/Lovepreet-se7en/domeye
 
 go 1.21
 

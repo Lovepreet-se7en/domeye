@@ -1,7 +1,7 @@
 package analyzer
 
 import (
-	"domeye/internal/scanner"
+	"github.com/Lovepreet-se7en/domeye/internal/scanner"
 )
 
 type Vulnerability struct {

@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"domeye/internal/scanner"
+	"github.com/Lovepreet-se7en/domeye/internal/scanner"
 )
 
 var xssPatterns = []struct {

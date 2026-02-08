@@ -1,7 +1,7 @@
 package main
 
 import (
-	"domeye/cmd"
+	"github.com/Lovepreet-se7en/domeye/cmd"
 	"log"
 )
 

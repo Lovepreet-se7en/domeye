@@ -3,7 +3,7 @@ package output
 import (
 	"fmt"
 
-	"domeye/internal/analyzer"
+	"github.com/Lovepreet-se7en/domeye/internal/analyzer"
 )
 
 type TextFormatter struct {

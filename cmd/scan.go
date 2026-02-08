@@ -7,9 +7,9 @@ import (
 	"os"
 	"sync"
 
-	"domeye/internal/analyzer"
-	"domeye/internal/output"
-	"domeye/internal/scanner"
+	"github.com/Lovepreet-se7en/domeye/internal/analyzer"
+	"github.com/Lovepreet-se7en/domeye/internal/output"
+	"github.com/Lovepreet-se7en/domeye/internal/scanner"
 	"github.com/spf13/cobra"
 )
 
