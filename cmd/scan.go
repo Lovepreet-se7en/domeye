@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"sync"
@@ -64,7 +65,7 @@ var scanCmd = &cobra.Command{
 
 		// Create output formatter
 		var formatter output.Formatter
-		switch outputFormat {
+		switch format {
 		case "json":
 			formatter = &output.JSONFormatter{}
 		case "html":
@@ -73,12 +74,22 @@ var scanCmd = &cobra.Command{
 			formatter = &output.TextFormatter{}
 		}
 
+		var w io.Writer = os.Stdout
+		if outputFile != "" {
+			f, err := os.Create(outputFile)
+			if err != nil {
+				log.Fatalf("Error creating output file: %v", err)
+			}
+			defer f.Close()
+			w = f
+		}
+
 		// Process URLs concurrently
-		processURLs(urls, formatter)
+		processURLs(urls, formatter, w)
 	},
 }
 
-func processURLs(urls []string, formatter output.Formatter) {
+func processURLs(urls []string, formatter output.Formatter, w io.Writer) {
 		var wg sync.WaitGroup
 		semaphore := make(chan struct{}, concurrency)
 		results := make(chan analyzer.Result, len(urls))
@@ -147,7 +158,7 @@ func processURLs(urls []string, formatter output.Formatter) {
 		}()
 
 		// Collect and format results
-		formatter.Format(results)
+		formatter.Format(results, w)
 	}
 
 func init() {

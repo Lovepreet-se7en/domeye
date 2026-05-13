@@ -3,6 +3,7 @@ package output
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 
 	"github.com/Lovepreet-se7en/domeye/internal/analyzer"
 )
@@ -10,7 +11,7 @@ import (
 type JSONFormatter struct {
 }
 
-func (f *JSONFormatter) Format(results chan analyzer.Result) {
+func (f *JSONFormatter) Format(results chan analyzer.Result, w io.Writer) {
 	var allResults []analyzer.Result
 
 	for result := range results {
@@ -19,9 +20,9 @@ func (f *JSONFormatter) Format(results chan analyzer.Result) {
 
 	jsonData, err := json.MarshalIndent(allResults, "", "  ")
 	if err != nil {
-		fmt.Printf("Error formatting JSON: %v\n", err)
+		fmt.Fprintf(w, "Error formatting JSON: %v\n", err)
 		return
 	}
 
-	fmt.Println(string(jsonData))
+	fmt.Fprintln(w, string(jsonData))
 }

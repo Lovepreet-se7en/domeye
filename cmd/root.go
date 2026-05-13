@@ -7,8 +7,9 @@ import (
 )
 
 var (
-	verbose bool
-	outputFormat  string
+	verbose    bool
+	format     string
+	outputFile string
 )
 
 var rootCmd = &cobra.Command{
@@ -29,5 +30,6 @@ func Execute() error {
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output")
-	rootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", "text", "output format (text, json, html)")
+	rootCmd.PersistentFlags().StringVar(&format, "format", "text", "output format (text, json, html)")
+	rootCmd.PersistentFlags().StringVarP(&outputFile, "output", "o", "", "save output to file")
 }

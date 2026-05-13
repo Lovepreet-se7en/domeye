@@ -21,7 +21,7 @@ domeye scan --file urls.txt   # batch
 - `main.go` → `cmd/` (Cobra CLI, 3 subcommands: `scan`, `version`, `root`)
 - `internal/scanner/` — HTTP fetch + HTML parse (goquery). Auto-prepends `https://` to URLs lacking a scheme.
 - `internal/analyzer/` — 7 check types: XSS, CSP, DOM, SourceSink, AdvancedDOM, PrototypePollution, DOMClobbering. `--all` is default.
-- `internal/output/` — text (stdout), JSON (`--output json`), HTML (`scan_report.html`).
+- `internal/output/` — text (default), JSON (`--format json`), HTML (`--format html`). Use `-o <file>` to save output to file.
 - `test_vulnerable.html` — manual test page with intentional vulns (for `domeye scan` against local file or `file://`).
 
 ## Quirks & conventions

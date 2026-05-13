@@ -1,8 +1,7 @@
 package output
 
 import (
-	"fmt"
-	"os"
+	"io"
 	"strings"
 	"text/template"
 
@@ -12,8 +11,7 @@ import (
 type HTMLFormatter struct {
 }
 
-func (f *HTMLFormatter) Format(results chan analyzer.Result) {
-	// Create HTML template
+func (f *HTMLFormatter) Format(results chan analyzer.Result, w io.Writer) {
 	tmpl := `<!DOCTYPE html>
 <html>
 <head>
@@ -90,35 +88,17 @@ func (f *HTMLFormatter) Format(results chan analyzer.Result) {
 </body>
 </html>`
 
-	// Parse template
 	t, err := template.New("report").Funcs(template.FuncMap{
 		"lower": strings.ToLower,
 	}).Parse(tmpl)
 	if err != nil {
-		fmt.Printf("Error parsing template: %v\n", err)
 		return
 	}
 
-	// Collect results
 	var allResults []analyzer.Result
 	for result := range results {
 		allResults = append(allResults, result)
 	}
 
-	// Create output file
-	file, err := os.Create("scan_report.html")
-	if err != nil {
-		fmt.Printf("Error creating HTML file: %v\n", err)
-		return
-	}
-	defer file.Close()
-
-	// Execute template
-	err = t.Execute(file, allResults)
-	if err != nil {
-		fmt.Printf("Error executing template: %v\n", err)
-		return
-	}
-
-	fmt.Printf("HTML report generated: %s\n", file.Name())
+	t.Execute(w, allResults)
 }
