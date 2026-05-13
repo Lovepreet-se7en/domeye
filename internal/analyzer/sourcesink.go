@@ -19,7 +19,7 @@ type SourceSink struct {
 // Common sources that can lead to DOM vulnerabilities
 var domSources = []string{
 	"document.URL",
-	"document.documentURI", 
+	"document.documentURI",
 	"document.URLUnencoded",
 	"document.baseURI",
 	"location",
@@ -31,10 +31,6 @@ var domSources = []string{
 	"window.name",
 	"history.pushState",
 	"history.replaceState",
-	"localStorage",
-	"sessionStorage",
-	"IndexedDB",
-	"Database",
 }
 
 // Common sinks that can lead to DOM vulnerabilities
@@ -73,10 +69,6 @@ var jquerySinks = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)\.wrap\s*\(`),
 	regexp.MustCompile(`(?i)\.wrapInner\s*\(`),
 	regexp.MustCompile(`(?i)\.wrapAll\s*\(`),
-	regexp.MustCompile(`(?i)\.has\s*\(`),
-	regexp.MustCompile(`(?i)\.constructor\s*\(`),
-	regexp.MustCompile(`(?i)\.init\s*\(`),
-	regexp.MustCompile(`(?i)\.index\s*\(`),
 	regexp.MustCompile(`(?i)jQuery\.parseHTML\s*\(`),
 	regexp.MustCompile(`(?i)\$\.parseHTML\s*\(`),
 }
@@ -90,27 +82,28 @@ func (a *Analyzer) CheckSourceSink(page *scanner.Page) []Vulnerability {
 
 	for _, source := range htmlSources {
 		for _, sink := range htmlSinks {
-			// Check if source and sink are in the same script or related context
-			if isRelated(source, sink, page.HTML) {
-				path := buildSourceSinkPath(page.HTML, source.Pattern, sink.Pattern)
-				poc := generateSourceSinkPOC(source.Pattern, sink.Pattern)
-				
-				vulnerabilities = append(vulnerabilities, Vulnerability{
-					Type:           "Source-Sink Flow",
-					Description:    fmt.Sprintf("Potential source-sink vulnerability: %s -> %s", source.Pattern, sink.Pattern),
-					Severity:       "High",
-					Location:       fmt.Sprintf("HTML line %d", findLineNumber(page.HTML, source.Position)),
-					Details:        fmt.Sprintf("Source: %s, Sink: %s", source.Pattern, sink.Pattern),
-					ProofOfConcept: poc,
-					Confidence:     "High",
-					CVSSScore:      getSourceSinkCVSSScore("Source-Sink", "High"),
-					CWEID:          getSourceSinkCWEID("Source-Sink"),
-					Remediation:    "Validate and sanitize data from sources before passing to sinks. Use proper encoding and escaping.",
-					References:     []string{"https://owasp.org/www-community/attacks/DOM_Based_XSS", "https://cheatsheetseries.owasp.org/cheatsheets/DOM_based_XSS_Prevention_Cheat_Sheet.html"},
-					SourceSinkPath: path,
-					CodeSnippet:    extractContext(page.HTML, source.Position, sink.Position),
-				})
+			related, confidence := scoreSourceSinkPair(source, sink, page.HTML)
+			if !related {
+				continue
 			}
+			path := buildSourceSinkPath(page.HTML, source.Pattern, sink.Pattern)
+			poc := generateSourceSinkPOC(source.Pattern, sink.Pattern)
+
+			vulnerabilities = append(vulnerabilities, Vulnerability{
+				Type:           "Source-Sink Flow",
+				Description:    fmt.Sprintf("Potential source-sink vulnerability: %s -> %s", source.Pattern, sink.Pattern),
+				Severity:       severityFromConfidence(confidence),
+				Location:       fmt.Sprintf("HTML line %d", findLineNumber(page.HTML, source.Position)),
+				Details:        fmt.Sprintf("Source: %s, Sink: %s", source.Pattern, sink.Pattern),
+				ProofOfConcept: poc,
+				Confidence:     confidence,
+				CVSSScore:      getSourceSinkCVSSScore("Source-Sink", severityFromConfidence(confidence)),
+				CWEID:          getSourceSinkCWEID("Source-Sink"),
+				Remediation:    "Validate and sanitize data from sources before passing to sinks. Use proper encoding and escaping.",
+				References:     []string{"https://owasp.org/www-community/attacks/DOM_Based_XSS", "https://cheatsheetseries.owasp.org/cheatsheets/DOM_based_XSS_Prevention_Cheat_Sheet.html"},
+				SourceSinkPath: path,
+				CodeSnippet:    extractContext(page.HTML, source.Position, sink.Position),
+			})
 		}
 	}
 
@@ -121,27 +114,28 @@ func (a *Analyzer) CheckSourceSink(page *scanner.Page) []Vulnerability {
 
 		for _, source := range jsSources {
 			for _, sink := range jsSinks {
-				// Check if source and sink are in the same script or related context
-				if isRelated(source, sink, js) {
-					path := buildSourceSinkPath(js, source.Pattern, sink.Pattern)
-					poc := generateSourceSinkPOC(source.Pattern, sink.Pattern)
-					
-					vulnerabilities = append(vulnerabilities, Vulnerability{
-						Type:           "Source-Sink Flow",
-						Description:    fmt.Sprintf("Potential source-sink vulnerability: %s -> %s", source.Pattern, sink.Pattern),
-						Severity:       "High",
-						Location:       "JavaScript",
-						Details:        fmt.Sprintf("Source: %s, Sink: %s, Code: %s", source.Pattern, sink.Pattern, truncateString(sink.CodeSnippet, 100)),
-						ProofOfConcept: poc,
-						Confidence:     "High",
-						CVSSScore:      getSourceSinkCVSSScore("Source-Sink", "High"),
-						CWEID:          getSourceSinkCWEID("Source-Sink"),
-						Remediation:    "Validate and sanitize data from sources before passing to sinks. Use proper encoding and escaping.",
-						References:     []string{"https://owasp.org/www-community/attacks/DOM_Based_XSS", "https://cheatsheetseries.owasp.org/cheatsheets/DOM_based_XSS_Prevention_Cheat_Sheet.html"},
-						SourceSinkPath: path,
-						CodeSnippet:    extractContext(js, source.Position, sink.Position),
-					})
+				related, confidence := scoreSourceSinkPair(source, sink, js)
+				if !related {
+					continue
 				}
+				path := buildSourceSinkPath(js, source.Pattern, sink.Pattern)
+				poc := generateSourceSinkPOC(source.Pattern, sink.Pattern)
+
+				vulnerabilities = append(vulnerabilities, Vulnerability{
+					Type:           "Source-Sink Flow",
+					Description:    fmt.Sprintf("Potential source-sink vulnerability: %s -> %s", source.Pattern, sink.Pattern),
+					Severity:       severityFromConfidence(confidence),
+					Location:       "JavaScript",
+					Details:        fmt.Sprintf("Source: %s, Sink: %s, Code: %s", source.Pattern, sink.Pattern, truncateString(sink.CodeSnippet, 100)),
+					ProofOfConcept: poc,
+					Confidence:     confidence,
+					CVSSScore:      getSourceSinkCVSSScore("Source-Sink", severityFromConfidence(confidence)),
+					CWEID:          getSourceSinkCWEID("Source-Sink"),
+					Remediation:    "Validate and sanitize data from sources before passing to sinks. Use proper encoding and escaping.",
+					References:     []string{"https://owasp.org/www-community/attacks/DOM_Based_XSS", "https://cheatsheetseries.owasp.org/cheatsheets/DOM_based_XSS_Prevention_Cheat_Sheet.html"},
+					SourceSinkPath: path,
+					CodeSnippet:    extractContext(js, source.Position, sink.Position),
+				})
 			}
 		}
 	}
@@ -166,11 +160,12 @@ func findSources(content string) []SourceInfo {
 	var sources []SourceInfo
 	
 	for _, source := range domSources {
-		// Create a regex for the source pattern
 		re := regexp.MustCompile(regexp.QuoteMeta(source))
 		matches := re.FindAllStringIndex(content, -1)
-		
 		for _, match := range matches {
+			if isInStringOrComment(content, match[0]) {
+				continue
+			}
 			sources = append(sources, SourceInfo{
 				Pattern:  source,
 				Position: match[0],
@@ -183,54 +178,111 @@ func findSources(content string) []SourceInfo {
 
 func findSinks(content string) []SinkInfo {
 	var sinks []SinkInfo
-	
-	// Check for regular DOM sinks
+
 	for _, sink := range domSinks {
 		matches := sink.FindAllStringIndex(content, -1)
 		for _, match := range matches {
-			// Extract the code snippet around the sink
+			if isInStringOrComment(content, match[0]) {
+				continue
+			}
 			start := max(0, match[0]-50)
 			end := min(len(content), match[1]+50)
-			snippet := content[start:end]
-			
 			sinks = append(sinks, SinkInfo{
-				Pattern:    sink.String(),
-				Position:   match[0],
-				CodeSnippet: snippet,
+				Pattern:     sink.String(),
+				Position:    match[0],
+				CodeSnippet: content[start:end],
 			})
 		}
 	}
-	
-	// Check for jQuery sinks
+
+	if !pageUsesJQuery(content) {
+		return sinks
+	}
+
 	for _, sink := range jquerySinks {
 		matches := sink.FindAllStringIndex(content, -1)
 		for _, match := range matches {
-			// Extract the code snippet around the sink
+			if isInStringOrComment(content, match[0]) {
+				continue
+			}
 			start := max(0, match[0]-50)
 			end := min(len(content), match[1]+50)
-			snippet := content[start:end]
-			
 			sinks = append(sinks, SinkInfo{
-				Pattern:    sink.String(),
-				Position:   match[0],
-				CodeSnippet: snippet,
+				Pattern:     sink.String(),
+				Position:    match[0],
+				CodeSnippet: content[start:end],
 			})
 		}
 	}
-	
+
 	return sinks
 }
 
-// isRelated checks if a source and sink are likely related in the code
-func isRelated(source SourceInfo, sink SinkInfo, content string) bool {
-	// Simple heuristic: if the source appears before the sink in the content
-	// and they're within a reasonable distance, they might be related
-	if source.Position < sink.Position {
-		distance := sink.Position - source.Position
-		// If the distance is less than 1000 characters, consider them potentially related
-		return distance < 1000
+func pageUsesJQuery(content string) bool {
+	firstChunk := content
+	if len(firstChunk) > 10240 {
+		firstChunk = firstChunk[:10240]
 	}
-	return false
+	return strings.Contains(firstChunk, "jQuery") ||
+		strings.Contains(firstChunk, "$(")
+}
+
+func scoreSourceSinkPair(source SourceInfo, sink SinkInfo, content string) (bool, string) {
+	if source.Position >= sink.Position {
+		return false, ""
+	}
+	distance := sink.Position - source.Position
+
+	if distance > 800 {
+		return false, ""
+	}
+
+	// Try variable flow tracking: look for var x = <source>; ...; sink(x)
+	if varName := extractVariableForSource(content, source.Position); varName != "" {
+		if variableUsedInContext(content, varName, sink.Position, source.Position) {
+			return true, "High"
+		}
+	}
+
+	// Direct proximity: source used directly in sink expression on the same line
+	if distance < 200 {
+		if !sameScope(content, source.Position, sink.Position) {
+			return false, ""
+		}
+		return true, "Medium"
+	}
+
+	return false, ""
+}
+
+func sameScope(content string, pos1, pos2 int) bool {
+	if pos1 > pos2 {
+		pos1, pos2 = pos2, pos1
+	}
+	depth := 0
+	for i := pos1; i < pos2 && i < len(content); i++ {
+		switch content[i] {
+		case '{':
+			depth++
+		case '}':
+			depth--
+		}
+	}
+	return depth == 0
+}
+
+func extractVariableForSource(content string, sourcePos int) string {
+	return extractVarBeforeSource(content, sourcePos)
+}
+
+func variableUsedInContext(content, varName string, sinkPos, sourcePos int) bool {
+	window := 150
+	start := max(sourcePos, sinkPos-window)
+	end := min(len(content), sinkPos+window)
+	ctx := content[start:end]
+
+	re := regexp.MustCompile(`\b` + regexp.QuoteMeta(varName) + `\b`)
+	return re.MatchString(ctx)
 }
 
 func max(a, b int) int {
@@ -321,4 +373,15 @@ func truncateString(str string, maxLen int) string {
 		return str
 	}
 	return str[:maxLen] + "..."
+}
+
+func severityFromConfidence(confidence string) string {
+	switch confidence {
+	case "High":
+		return "High"
+	case "Medium":
+		return "Medium"
+	default:
+		return "Low"
+	}
 }

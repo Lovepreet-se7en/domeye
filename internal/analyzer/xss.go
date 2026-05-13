@@ -39,9 +39,14 @@ var xssPatterns = []struct {
 		description: "Potential DOM XSS via location.hash",
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)URL\s*\.\s*\w+\s*\(`),
-		severity:    "Medium",
-		description: "Potential DOM XSS via URL property access",
+		pattern:     regexp.MustCompile(`(?i)setTimeout\s*\(\s*(location|document\.URL|document\.referrer|window\.name)(?:\s*,\s*\d+)?\s*\)`),
+		severity:    "High",
+		description: "Potential DOM XSS via setTimeout with user input",
+	},
+	{
+		pattern:     regexp.MustCompile(`(?i)setInterval\s*\(\s*(location|document\.URL|document\.referrer|window\.name)(?:\s*,\s*\d+)?\s*\)`),
+		severity:    "High",
+		description: "Potential DOM XSS via setInterval with user input",
 	},
 }
 
@@ -60,6 +65,9 @@ func (a *Analyzer) CheckXSS(page *scanner.Page) []Vulnerability {
 	for _, pattern := range xssPatterns {
 		matches := pattern.pattern.FindAllStringIndex(page.HTML, -1)
 		for _, match := range matches {
+			if isInStringOrComment(page.HTML, match[0]) {
+				continue
+			}
 			snippet := page.HTML[match[0]:match[1]]
 			location := fmt.Sprintf("HTML line %d", findLineNumber(page.HTML, match[0]))
 			
@@ -94,31 +102,55 @@ func (a *Analyzer) CheckXSS(page *scanner.Page) []Vulnerability {
 	// Check JavaScript for dangerous sources
 	for _, js := range page.JavaScript {
 		for _, source := range dangerousSources {
-			if strings.Contains(js, source) {
-				location := fmt.Sprintf("JavaScript (source: %s)", source)
-				
-				vulnerabilities = append(vulnerabilities, Vulnerability{
-					Type:           "XSS",
-					Description:    fmt.Sprintf("Potential XSS via dangerous source: %s", source),
-					Severity:       "High",
-					Location:       location,
-					Details:        "Dangerous data source detected in JavaScript",
-					ProofOfConcept: generateSourceBasedPOC(source),
-					Confidence:     "Medium",
-					CVSSScore:      getXSSCVSSScore("XSS", "High"),
-					CWEID:          getXSSCWEID("XSS"),
-					Remediation:    getXSSRemediation(fmt.Sprintf("XSS via %s", source)),
-					References:     []string{"https://owasp.org/www-community/attacks/DOM_Based_XSS"},
-					CodeSnippet:    extractContext(js, strings.Index(js, source), strings.Index(js, source)+len(source)),
-				})
+			pos := strings.Index(js, source)
+			if pos == -1 {
+				continue
 			}
+			if isInStringOrComment(js, pos) {
+				continue
+			}
+			location := fmt.Sprintf("JavaScript (source: %s)", source)
+
+			vulnerabilities = append(vulnerabilities, Vulnerability{
+				Type:           "XSS",
+				Description:    fmt.Sprintf("Potential XSS via dangerous source: %s", source),
+				Severity:       severityFromConfidence(sinkNearbyConfidence(js, pos)),
+				Location:       location,
+				Details:        "Dangerous data source detected in JavaScript",
+				ProofOfConcept: generateSourceBasedPOC(source),
+				Confidence:     sinkNearbyConfidence(js, pos),
+				CVSSScore:      getXSSCVSSScore("XSS", severityFromConfidence(sinkNearbyConfidence(js, pos))),
+				CWEID:          getXSSCWEID("XSS"),
+				Remediation:    getXSSRemediation(fmt.Sprintf("XSS via %s", source)),
+				References:     []string{"https://owasp.org/www-community/attacks/DOM_Based_XSS"},
+				CodeSnippet:    extractContext(js, strings.Index(js, source), strings.Index(js, source)+len(source)),
+			})
 		}
 	}
 
 	return vulnerabilities
 }
 
-// Helper functions for enhanced analysis
+var sourceOnlySinkIndicators = []string{
+	"innerhtml", "outerhtml", "insertadjacenthtml",
+	"document.write", "document.writeln",
+	"eval(", "settimeout(", "setinterval(",
+	"new function", "execscript",
+}
+
+func sinkNearbyConfidence(js string, pos int) string {
+	end := pos + 100
+	if end > len(js) {
+		end = len(js)
+	}
+	after := strings.ToLower(js[pos:end])
+	for _, ind := range sourceOnlySinkIndicators {
+		if strings.Contains(after, ind) {
+			return "Medium"
+		}
+	}
+	return "Low"
+}
 
 func generateXSSEXPoc(pattern string, hasSourceSink bool) string {
 	switch {

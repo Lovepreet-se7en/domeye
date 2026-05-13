@@ -39,30 +39,20 @@ var domPatterns = []struct {
 		description: "Document writeln operation",
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)setTimeout\s*\(.*(eval|Function)\s*\(`),
+		pattern:     regexp.MustCompile(`(?i)setTimeout\s*\(\s*["'][^"']*(?:eval|Function)[^"']*["']`),
 		severity:    "Critical",
-		description: "Dynamic code execution via setTimeout",
+		description: "Dynamic code execution via setTimeout with string argument",
 	},
 	{
-		pattern:     regexp.MustCompile(`(?i)setInterval\s*\(.*(eval|Function)\s*\(`),
+		pattern:     regexp.MustCompile(`(?i)setInterval\s*\(\s*["'][^"']*(?:eval|Function)[^"']*["']`),
 		severity:    "Critical",
-		description: "Dynamic code execution via setInterval",
+		description: "Dynamic code execution via setInterval with string argument",
 	},
 	{
 		pattern:     regexp.MustCompile(`(?i)new\s+Function\s*\(`),
 		severity:    "Critical",
 		description: "Dynamic function creation",
 	},
-}
-
-var eventHandlers = []string{
-	"onload",
-	"onclick",
-	"onerror",
-	"onmouseover",
-	"onsubmit",
-	"onfocus",
-	"onblur",
 }
 
 func (a *Analyzer) CheckDOM(page *scanner.Page) []Vulnerability {
@@ -72,9 +62,12 @@ func (a *Analyzer) CheckDOM(page *scanner.Page) []Vulnerability {
 	for _, pattern := range domPatterns {
 		matches := pattern.pattern.FindAllStringIndex(page.HTML, -1)
 		for _, match := range matches {
+			if isInStringOrComment(page.HTML, match[0]) {
+				continue
+			}
 			snippet := page.HTML[match[0]:match[1]]
 			location := fmt.Sprintf("HTML line %d", findLineNumber(page.HTML, match[0]))
-			
+
 			vulnerabilities = append(vulnerabilities, Vulnerability{
 				Type:           "DOM",
 				Description:    pattern.description,
@@ -89,34 +82,6 @@ func (a *Analyzer) CheckDOM(page *scanner.Page) []Vulnerability {
 				References:     []string{"https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/01-Testing_for_DOM-based_Cross_Site_Scripting"},
 				CodeSnippet:    extractContext(page.HTML, match[0], match[1]),
 			})
-		}
-	}
-
-	// Check JavaScript for event handlers
-	for _, js := range page.JavaScript {
-		for _, handler := range eventHandlers {
-			re := regexp.MustCompile(`(?i)`+handler+`\s*=`)
-			if re.MatchString(js) {
-				matches := re.FindAllStringIndex(js, -1)
-				for _, match := range matches {
-					snippet := js[match[0]:match[1]]
-					
-					vulnerabilities = append(vulnerabilities, Vulnerability{
-						Type:           "DOM",
-						Description:    fmt.Sprintf("Inline event handler: %s", handler),
-						Severity:       "Medium",
-						Location:       "JavaScript",
-						Details:        fmt.Sprintf("Pattern: %s", snippet),
-						ProofOfConcept: generateInlineEventHandlerPOC(handler),
-						Confidence:     "Medium",
-						CVSSScore:      getDOMCVSSScore("DOM", "Medium"),
-						CWEID:          getDOMCWEID("DOM"),
-						Remediation:    getDOMRemediation(fmt.Sprintf("Inline event handler: %s", handler)),
-						References:     []string{"https://owasp.org/www-project-web-security-testing-guide/latest/4-Web_Application_Security_Testing/11-Client-side_Testing/01-Testing_for_DOM-based_Cross_Site_Scripting"},
-						CodeSnippet:    extractContext(js, match[0], match[1]),
-					})
-				}
-			}
 		}
 	}
 
@@ -143,19 +108,6 @@ func generateDOMPOC(description, snippet string) string {
 		return fmt.Sprintf(`PoC: <script>var fn = new Function('%s'); fn();</script>`, snippet)
 	default:
 		return fmt.Sprintf("Potential DOM vulnerability: %s", description)
-	}
-}
-
-func generateInlineEventHandlerPOC(handler string) string {
-	switch handler {
-	case "onclick":
-		return fmt.Sprintf(`PoC: <button onclick="%s">Click me</button>`, "alert('XSS')")
-	case "onload":
-		return fmt.Sprintf(`PoC: <body onload="%s">`, "alert('XSS')")
-	case "onerror":
-		return fmt.Sprintf(`PoC: <img src='invalid.jpg' onerror="%s">`, "alert('XSS')")
-	default:
-		return fmt.Sprintf("Potential inline event handler vulnerability: %s", handler)
 	}
 }
 
